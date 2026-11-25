@@ -21296,6 +21296,66 @@ end
 			else if cptsOnMouseClick ~= nil then cptsOnMouseClick:Disconnect() cptsOnMouseClick = nil end end
 		end})
 
+		local csgsConn = nil
+		Main.CreateApp({Name = "Click ScreenGui to select", IconMap = Explorer.ClassIcons, Icon = "ScreenGui", OnClick = function(callback)
+			if csgsConn then csgsConn:Disconnect() csgsConn = nil end
+			if not callback then return end
+
+			local UIS = service.UserInputService
+			local function isDex(o)
+				local ok, res = pcall(function() return o:IsDescendantOf(gui) end)
+				return ok and res
+			end
+			local function hitsIn(container, x, y)
+				if not container then return nil end
+				local ok, list = pcall(function() return container:GetGuiObjectsAtPosition(x, y) end)
+				if ok and type(list) == "table" then return list end
+				return nil
+			end
+			local function displayOrderOf(o)
+				local sg = o:FindFirstAncestorWhichIsA("LayerCollector")
+				return sg and sg:IsA("ScreenGui") and sg.DisplayOrder or 0
+			end
+
+			csgsConn = UIS.InputBegan:Connect(function(input)
+				if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+				pcall(function()
+					local x, y = input.Position.X, input.Position.Y
+					local containers = {}
+					local pg = plr:FindFirstChildOfClass("PlayerGui")
+					if pg then containers[#containers+1] = pg end
+					containers[#containers+1] = service.CoreGui
+					if env.gethui then
+						local ok, h = pcall(env.gethui)
+						if ok and typeof(h) == "Instance" then containers[#containers+1] = h end
+					end
+
+					local best, bestOrder
+					for _, c in ipairs(containers) do
+						local list = hitsIn(c, x, y)
+						if list and list[1] then
+							-- Clicking on Dex itself: ignore, don't select what's behind it
+							if isDex(list[1]) then return end
+							local order = displayOrderOf(list[1])
+							if not best or order > bestOrder then best, bestOrder = list[1], order end
+						end
+					end
+					if not best then return end
+
+					-- Select the clicked element, or its closest ancestor that exists in the tree
+					local target = best
+					while target and not nodes[cloneref(target)] do
+						target = target.Parent
+					end
+					if target and nodes[cloneref(target)] then
+						local node = nodes[cloneref(target)]
+						selection:Set(node)
+						Explorer.ViewNode(node)
+					end
+				end)
+			end)
+		end})
+
 		Main.CreateApp({Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window})
 
 		Main.CreateApp({Name = "Save Instance", IconMap = Main.LargeIcons, Icon = "Watcher", Window = SaveInstance.Window})
